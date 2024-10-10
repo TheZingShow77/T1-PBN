@@ -1,119 +1,110 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+typedef struct {
+    int r;
+    int g;
+    int b;
+} Pixel;
+
 void menu();
-void open_image(char image_name[], int style);
-void image_info(FILE *fp, int *coluna, int *linha, int *val);
-void process_image(FILE *fp, int style);
-int** rotate90(int **matriz, int *linha, int *coluna); 
-void toNegative(int **matriz, int linha, int coluna);  
-void toOldStyle(int **matriz, int linha, int coluna);  
+void openImage(char image_name[], int style);
+void processImage(FILE *fp, int style);
+void imageInfo(FILE *fp, int *coluna, int *linha, int *val);
+Pixel** rotateImage90(Pixel **matriz, int linha, int coluna, int *novaLinha, int *novaColuna);
 
 int main() {
-    int op;
+    int op; 
     char image_name[100];
-
+    
     printf("\n---------------- EDIT IMAGE MENU ----------------\n\n");
     printf("Enter the name of the image you want to edit: ");
     scanf("%s", image_name);
 
-    do {
+    while (1) {
         menu();
         scanf("%d", &op);
 
-        switch (op)
-        {
-        case 1:
-        case 2:
-        case 3:
-        case 4:  
-        case 5: 
-            open_image(image_name, op);
-            break;
-        default:
+        if (op == 0) {
+            printf("Finishing program.\n");
             break;
         }
 
-    } while (op != 0);
+        if (op < 1 || op > 5) {
+            printf("Invalid option. Please try again.\n");
+            continue;
+        }
 
-    printf("\nProgram closed.");
+        openImage(image_name, op);
+    }
 
     return 0;
 }
 
-void menu() {
-    printf("\n------------ EDIT IMAGE MENU ------------\n\n");
-    printf("\n[1] - Convert image to black and white.");
-    printf("\n[2] - Convert image to X-ray.");
-    printf("\n[3] - Rotate image 90 degrees.");
-    printf("\n[4] - Convert image to negative.");   
-    printf("\n[5] - Convert image to old style.");   
-    printf("\n[0] - Finish the program.");
-    printf("\nOption: ");
-}
-
-void open_image(char image_name[], int style) {
+void openImage(char image_name[], int style) {
     FILE *fp = fopen(image_name, "r");
 
     if (fp == NULL) {
-        printf("Error opening the image %s\n", image_name);
+        printf("\nError opening the file %s\n", image_name);
         return;
     }
 
-    process_image(fp, style);
+    processImage(fp, style);
 }
 
-void image_info(FILE *fp, int *coluna, int *linha, int *val) {
-    char tipoImg[3];
-
-    fscanf(fp, "%s", tipoImg);
-    printf("\nPPM type: %s\n", tipoImg);
-
-    fscanf(fp, "%d %d", coluna, linha);
-    printf("\nImage size: %d x %d", *coluna, *linha);
-
-    fscanf(fp, "%d", val);
-    printf("\nMaximum pixel value: %d\n", *val);
-}
-
-void process_image(FILE *fp, int style) {
+void processImage(FILE *fp, int style) {
     int coluna, linha, val;
     int r, g, b;
 
-    image_info(fp, &coluna, &linha, &val);
+    imageInfo(fp, &coluna, &linha, &val);
 
-    int **matriz = (int **)malloc(linha * sizeof(int *));
+    Pixel **matriz = (Pixel **)malloc(linha * sizeof(Pixel *));
     for (int i = 0; i < linha; i++) {
-        matriz[i] = (int *)malloc(coluna * sizeof(int));
+        matriz[i] = (Pixel *)malloc(coluna * sizeof(Pixel));
     }
 
     for (int i = 0; i < linha; i++) {
         for (int j = 0; j < coluna; j++) {
             fscanf(fp, "%d %d %d", &r, &g, &b);
-            matriz[i][j] = (int)((r * 0.30) + (g * 0.59) + (b * 0.11));
+
+            switch (style) {
+                case 1: // Tons de cinza
+                    matriz[i][j].r = matriz[i][j].g = matriz[i][j].b = (r * 0.30) + (g * 0.59) + (b * 0.11);
+                    break;
+
+                case 2: // Negativa
+                    matriz[i][j].r = 255 - r;
+                    matriz[i][j].g = 255 - g;
+                    matriz[i][j].b = 255 - b;
+                    break;
+
+                case 3: // Efeito envelhecido
+                    matriz[i][j].r = (r * 0.393) + (g * 0.769) + (b * 0.189);
+                    matriz[i][j].g = (r * 0.349) + (g * 0.686) + (b * 0.168);
+                    matriz[i][j].b = (r * 0.272) + (g * 0.534) + (b * 0.131);
+
+                    if (matriz[i][j].r > 255) matriz[i][j].b = 255;
+                    if (matriz[i][j].g > 255) matriz[i][j].g = 255;
+                    if (matriz[i][j].b > 255) matriz[i][j].r = 255;
+                    break;
+
+                case 4: // Raio-X
+                    matriz[i][j].r = matriz[i][j].g = matriz[i][j].b = 255 - ((r * 0.30) + (g * 0.59) + (b * 0.11));
+                    break;
+
+                case 5: // Rotacionar 90 graus
+                    break;
+            }
         }
     }
 
     fclose(fp);
-    printf("\nImage successfully read.");
-
-    switch (style) {
-        case 3:
-            matriz = rotate90(matriz, &linha, &coluna); 
-            break;
-        case 4:
-            toNegative(matriz, linha, coluna); 
-            break;
-        case 5:
-            toOldStyle(matriz, linha, coluna); 
-            break;
-        default:
-            break;
-    }
+    printf("Image successfully read.\n");
 
     FILE *fp_saida = fopen("output_image.ppm", "w");
+
     if (fp_saida == NULL) {
-        printf("Error opening the file for writing.\n");
+        printf("\nError opening the file\n");
         for (int i = 0; i < linha; i++) {
             free(matriz[i]);
         }
@@ -121,13 +112,13 @@ void process_image(FILE *fp, int style) {
         return;
     }
 
-    fprintf(fp_saida, "P2\n");
+    fprintf(fp_saida, "P3\n");
     fprintf(fp_saida, "%d %d\n", coluna, linha);
-    fprintf(fp_saida, "255\n");
+    fprintf(fp_saida, "%d\n", val);
 
     for (int i = 0; i < linha; i++) {
         for (int j = 0; j < coluna; j++) {
-            fprintf(fp_saida, "%d ", matriz[i][j]);
+            fprintf(fp_saida, "%d %d %d ", matriz[i][j].r, matriz[i][j].g, matriz[i][j].b);
         }
         fprintf(fp_saida, "\n");
     }
@@ -139,44 +130,24 @@ void process_image(FILE *fp, int style) {
     }
     free(matriz);
 
-    printf("Image saved.");
+    printf("Image successfully processed and saved as output_image.ppm\n");
 }
 
-int** rotate90(int **matriz, int *linha, int *coluna) {
-    int newLinha = *coluna;
-    int newColuna = *linha;
 
-    int **rotated = (int **)malloc(newLinha * sizeof(int *));
-    for (int i = 0; i < newLinha; i++) {
-        rotated[i] = (int *)malloc(newColuna * sizeof(int));
-    }
-
-    for (int i = 0; i < *linha; i++) {
-        for (int j = 0; j < *coluna; j++) {
-            rotated[j][newLinha - 1 - i] = matriz[i][j];
-        }
-    }
-
-    *linha = newLinha;
-    *coluna = newColuna;
-
-    return rotated;
+void imageInfo(FILE *fp, int *coluna, int *linha, int *val) {
+    char tipoImg[3];
+    fscanf(fp, "%s", tipoImg);
+    fscanf(fp, "%d %d", coluna, linha);
+    fscanf(fp, "%d", val);
 }
 
-void toNegative(int **matriz, int linha, int coluna) {
-    for (int i = 0; i < linha; i++) {
-        for (int j = 0; j < coluna; j++) {
-            matriz[i][j] = 255 - matriz[i][j];
-        }
-    }
-}
-
-void toOldStyle(int **matriz, int linha, int coluna) {
-    for (int i = 0; i < linha; i++) {
-        for (int j = 0; j < coluna; j++) {
-            int pixel = matriz[i][j];
-            int aged_pixel = (pixel * 0.9); 
-            matriz[i][j] = aged_pixel > 255 ? 255 : aged_pixel;
-        }
-    }
+void menu() {
+    printf("\n------------ EDIT IMAGE MENU ------------\n\n");
+    printf("[1] - Convert image to grey.\n");
+    printf("[2] - Convert image to negative.\n");
+    printf("[3] - Convert image to aged.\n");
+    printf("[4] - Convert image to X-ray.\n");
+    printf("[5] - Rotate image 90 degrees.\n");
+    printf("[0] - Finish the program.\n");
+    printf("Option: ");
 }
