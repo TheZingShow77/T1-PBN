@@ -1,184 +1,182 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
-typedef struct {
-    unsigned char r, g, b;
-} Pixel;
+void menu();
+void open_image(char image_name[], int style);
+void image_info(FILE *fp, int *coluna, int *linha, int *val);
+void process_image(FILE *fp, int style);
+int** rotate90(int **matriz, int *linha, int *coluna); 
+void toNegative(int **matriz, int linha, int coluna);  
+void toOldStyle(int **matriz, int linha, int coluna);  
 
-Pixel** loadPPM(const char* filename, int* width, int* height) {
-    FILE* file = fopen(filename, "rb");
-    if (!file) {
-        printf("Erro ao abrir o arquivo '%s'. Verifique se o arquivo existe e se o nome está correto.\n", filename);
-        exit(1);
+int main() {
+    int op;
+    char image_name[100];
+
+    printf("\n---------------- EDIT IMAGE MENU ----------------\n\n");
+    printf("Enter the name of the image you want to edit: ");
+    scanf("%s", image_name);
+
+    do {
+        menu();
+        scanf("%d", &op);
+
+        switch (op)
+        {
+        case 1:
+        case 2:
+        case 3:
+        case 4:  
+        case 5: 
+            open_image(image_name, op);
+            break;
+        default:
+            break;
+        }
+
+    } while (op != 0);
+
+    printf("\nProgram closed.");
+
+    return 0;
+}
+
+void menu() {
+    printf("\n------------ EDIT IMAGE MENU ------------\n\n");
+    printf("\n[1] - Convert image to black and white.");
+    printf("\n[2] - Convert image to X-ray.");
+    printf("\n[3] - Rotate image 90 degrees.");
+    printf("\n[4] - Convert image to negative.");   
+    printf("\n[5] - Convert image to old style.");   
+    printf("\n[0] - Finish the program.");
+    printf("\nOption: ");
+}
+
+void open_image(char image_name[], int style) {
+    FILE *fp = fopen(image_name, "r");
+
+    if (fp == NULL) {
+        printf("Error opening the image %s\n", image_name);
+        return;
     }
 
-    char format[3];
-    fscanf(file, "%s\n", format);
-    if (strcmp(format, "P6") != 0) {
-        printf("Formato de arquivo '%s' não suportado. O programa suporta apenas arquivos PPM no formato P6.\n", filename);
-        fclose(file);
-        exit(1);
+    process_image(fp, style);
+}
+
+void image_info(FILE *fp, int *coluna, int *linha, int *val) {
+    char tipoImg[3];
+
+    fscanf(fp, "%s", tipoImg);
+    printf("\nPPM type: %s\n", tipoImg);
+
+    fscanf(fp, "%d %d", coluna, linha);
+    printf("\nImage size: %d x %d", *coluna, *linha);
+
+    fscanf(fp, "%d", val);
+    printf("\nMaximum pixel value: %d\n", *val);
+}
+
+void process_image(FILE *fp, int style) {
+    int coluna, linha, val;
+    int r, g, b;
+
+    image_info(fp, &coluna, &linha, &val);
+
+    int **matriz = (int **)malloc(linha * sizeof(int *));
+    for (int i = 0; i < linha; i++) {
+        matriz[i] = (int *)malloc(coluna * sizeof(int));
     }
 
-    fscanf(file, "%d %d\n255\n", width, height);
-
-    Pixel** image = (Pixel**)malloc(*height * sizeof(Pixel*));
-    for (int i = 0; i < *height; i++) {
-        image[i] = (Pixel*)malloc(*width * sizeof(Pixel));
-    }
-
-    for (int i = 0; i < *height; i++) {
-        if (fread(image[i], sizeof(Pixel), *width, file) != *width) {
-            printf("Erro ao ler os dados da imagem. O arquivo pode estar corrompido ou não é um PPM válido.\n");
-            fclose(file);
-            exit(1);
+    for (int i = 0; i < linha; i++) {
+        for (int j = 0; j < coluna; j++) {
+            fscanf(fp, "%d %d %d", &r, &g, &b);
+            matriz[i][j] = (int)((r * 0.30) + (g * 0.59) + (b * 0.11));
         }
     }
 
-    fclose(file);
-    return image;
+    fclose(fp);
+    printf("\nImage successfully read.");
+
+    switch (style) {
+        case 3:
+            matriz = rotate90(matriz, &linha, &coluna); 
+            break;
+        case 4:
+            toNegative(matriz, linha, coluna); 
+            break;
+        case 5:
+            toOldStyle(matriz, linha, coluna); 
+            break;
+        default:
+            break;
+    }
+
+    FILE *fp_saida = fopen("output_image.ppm", "w");
+    if (fp_saida == NULL) {
+        printf("Error opening the file for writing.\n");
+        for (int i = 0; i < linha; i++) {
+            free(matriz[i]);
+        }
+        free(matriz);
+        return;
+    }
+
+    fprintf(fp_saida, "P2\n");
+    fprintf(fp_saida, "%d %d\n", coluna, linha);
+    fprintf(fp_saida, "255\n");
+
+    for (int i = 0; i < linha; i++) {
+        for (int j = 0; j < coluna; j++) {
+            fprintf(fp_saida, "%d ", matriz[i][j]);
+        }
+        fprintf(fp_saida, "\n");
+    }
+
+    fclose(fp_saida);
+
+    for (int i = 0; i < linha; i++) {
+        free(matriz[i]);
+    }
+    free(matriz);
+
+    printf("Image saved.");
 }
 
-void savePPM(const char* filename, Pixel** image, int width, int height) {
-    FILE* file = fopen(filename, "wb");
-    if (!file) {
-        printf("Erro ao salvar o arquivo '%s'. Verifique as permissões e o nome do arquivo.\n", filename);
-        exit(1);
-    }
-    fprintf(file, "P6\n%d %d\n255\n", width, height);
-    for (int i = 0; i < height; i++) {
-        fwrite(image[i], sizeof(Pixel), width, file);
-    }
-    fclose(file);
-}
+int** rotate90(int **matriz, int *linha, int *coluna) {
+    int newLinha = *coluna;
+    int newColuna = *linha;
 
-void toGrayscale(Pixel** image, int width, int height) {
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            unsigned char gray = 0.3 * image[i][j].r + 0.59 * image[i][j].g + 0.11 * image[i][j].b;
-            image[i][j].r = image[i][j].g = image[i][j].b = gray;
+    int **rotated = (int **)malloc(newLinha * sizeof(int *));
+    for (int i = 0; i < newLinha; i++) {
+        rotated[i] = (int *)malloc(newColuna * sizeof(int));
+    }
+
+    for (int i = 0; i < *linha; i++) {
+        for (int j = 0; j < *coluna; j++) {
+            rotated[j][newLinha - 1 - i] = matriz[i][j];
         }
     }
-}
 
-void toNegative(Pixel** image, int width, int height) {
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            image[i][j].r = 255 - image[i][j].r;
-            image[i][j].g = 255 - image[i][j].g;
-            image[i][j].b = 255 - image[i][j].b;
-        }
-    }
-}
+    *linha = newLinha;
+    *coluna = newColuna;
 
-void toXRay(Pixel** image, int width, int height) {
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            unsigned char temp = image[i][j].r;
-            image[i][j].r = image[i][j].b;
-            image[i][j].b = temp;
-        }
-    }
-}
-
-Pixel** rotate90(Pixel** image, int* width, int* height) {
-    int newWidth = *height;
-    int newHeight = *width;
-    Pixel** rotated = (Pixel**)malloc(newHeight * sizeof(Pixel*));
-    for (int i = 0; i < newHeight; i++) {
-        rotated[i] = (Pixel*)malloc(newWidth * sizeof(Pixel));
-    }
-
-    for (int i = 0; i < *height; i++) {
-        for (int j = 0; j < *width; j++) {
-            rotated[j][newHeight - 1 - i] = image[i][j];
-        }
-    }
-
-    *width = newWidth;
-    *height = newHeight;
     return rotated;
 }
 
-void toOldStyle(Pixel** image, int width, int height) {
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            unsigned char r = image[i][j].r;
-            unsigned char g = image[i][j].g;
-            unsigned char b = image[i][j].b;
-            image[i][j].r = (r + g + b) / 3;
-            image[i][j].g = (r + g + b) / 3 * 0.9;
-            image[i][j].b = (r + g + b) / 3 * 0.7;
+void toNegative(int **matriz, int linha, int coluna) {
+    for (int i = 0; i < linha; i++) {
+        for (int j = 0; j < coluna; j++) {
+            matriz[i][j] = 255 - matriz[i][j];
         }
     }
 }
 
-int main() {
-    char filename[100];
-    printf("Digite o nome da imagem PPM (ex: imagem.ppm): ");
-    scanf("%s", filename);
-
-    int width, height;
-    Pixel** image = loadPPM(filename, &width, &height);
-
-    if (width < 400 || height < 400) {
-        printf("A imagem deve ter no mínimo 400x400 pixels.\n");
-        return 1;
-    }
-
-    int option;
-    printf("\nEscolha uma das opções abaixo:\n");
-    printf("1. Tons de Cinza\n");
-    printf("2. Negativa\n");
-    printf("3. Raio-X\n");
-    printf("4. Rotacionar 90 graus\n");
-    printf("5. Envelhecida\n");
-    printf("Opção: ");
-    scanf("%d", &option);
-
-    Pixel** processedImage = image;
-    char outputFilename[100];
-
-    switch (option) {
-        case 1:
-            toGrayscale(image, width, height);
-            strcpy(outputFilename, "tons_de_cinza.ppm");
-            break;
-        case 2:
-            toNegative(image, width, height);
-            strcpy(outputFilename, "negativa.ppm");
-            break;
-        case 3:
-            toXRay(image, width, height);
-            strcpy(outputFilename, "raio_x.ppm");
-            break;
-        case 4:
-            processedImage = rotate90(image, &width, &height);
-            strcpy(outputFilename, "rotacionada_90.ppm");
-            break;
-        case 5:
-            toOldStyle(image, width, height);
-            strcpy(outputFilename, "envelhecida.ppm");
-            break;
-        default:
-            printf("Opção inválida.\n");
-            return 1;
-    }
-
-    savePPM(outputFilename, processedImage, width, height);
-    printf("Imagem processada salva como: %s\n", outputFilename);
-
-    for (int i = 0; i < height; i++) {
-        free(image[i]);
-    }
-    free(image);
-    if (processedImage != image) {
-        for (int i = 0; i < height; i++) {
-            free(processedImage[i]);
+void toOldStyle(int **matriz, int linha, int coluna) {
+    for (int i = 0; i < linha; i++) {
+        for (int j = 0; j < coluna; j++) {
+            int pixel = matriz[i][j];
+            int aged_pixel = (pixel * 0.9); 
+            matriz[i][j] = aged_pixel > 255 ? 255 : aged_pixel;
         }
-        free(processedImage);
     }
-
-    return 0;
 }
